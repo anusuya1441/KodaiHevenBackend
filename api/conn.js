@@ -3,7 +3,7 @@ const sql = require('mssql');
 const config = {
   user: 'sa',
   password: 'f1berdata',
-  server: '192.168.0.2',
+   server: 'localhost',
   port: 1433,
   database: 'THE_SPOT',
   options: {
@@ -16,11 +16,7 @@ let pool;
 
 async function getPool() {
   if (pool) {
-    // If pool already connected or connecting, just return it
-    if (pool.connected || pool.connecting) {
-      return pool;
-    }
-    // Otherwise reconnect
+    if (pool.connected || pool.connecting) return pool;
     await pool.connect();
     return pool;
   }

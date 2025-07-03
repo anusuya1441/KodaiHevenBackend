@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import ngrok from './api/ngrok';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
 
@@ -33,7 +34,7 @@ const KOTList = () => {
 
     try {
       const response = await fetch(
-        `http://172.20.10.2:3001/api/kot-list?fromDate=${fromFormatted}&toDate=${toFormatted}`
+        `${ngrok.BASE_URL}/api/kot-list?fromDate=${fromFormatted}&toDate=${toFormatted}`
       );
       const json = await response.json();
 
@@ -166,7 +167,7 @@ const KOTList = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF2C2',
+    backgroundColor: '#ffb665',
     padding: 16,
   },
   inputRow: {

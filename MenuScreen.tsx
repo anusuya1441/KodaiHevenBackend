@@ -1,31 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  ScrollView,
-  TouchableOpacity,
-  useWindowDimensions,
-  Alert,
+  View, Text, StyleSheet, TextInput, ScrollView,
+  TouchableOpacity, useWindowDimensions, Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from './App';
+import { useSelectedItems } from './SelectedItemsContext';
+import ngrok from './api/ngrok';
+import { useUser } from './UserContext';
 
-// Type Definitions
-type TableRow = {
-  sno?: number;
-  code: string;
-  desc: string;
-  qty?: number;
-  price?: number;
-  total: number;
-  remarks: string;
-  id?: number;
-  Cancel_Status?: string;
-};
 
 type MenuItem = {
   name: string;
@@ -37,16 +22,21 @@ type MenuScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Menu'>;
 type MenuScreenRouteProp = RouteProp<RootStackParamList, 'Menu'>;
 
 const MenuScreen = () => {
-  const [tableData, setTableData] = useState<TableRow[]>([]);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const navigation = useNavigation<MenuScreenNavigationProp>();
   const route = useRoute<MenuScreenRouteProp>();
-  const { width } = useWindowDimensions();
-
   const { selectedItem, selectedRadio, selectedRoom } = route.params;
 
+  const { selectedItems, setSelectedItems, clearSelectedItems } = useSelectedItems();
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const { userId } = useUser(); // ✅ Use inside component
+
+  const { width } = useWindowDimensions();
+
+   // ✅ ADD THIS LINE TO DEBUG userId
+  console.log('👤 userId in MenuScreen:', userId);
+
   useEffect(() => {
-    fetch(`http://172.20.10.2:3001/api/menu_items/${encodeURIComponent(selectedItem)}`)
+    fetch(`${ngrok.BASE_URL}/api/menu_items/${encodeURIComponent(selectedItem)}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
@@ -61,89 +51,82 @@ const MenuScreen = () => {
       .catch(err => console.error('Error fetching menu items:', err));
   }, [selectedItem]);
 
-  const updateField = (index: number, key: keyof TableRow, value: string) => {
-    setTableData(prevData => {
-      const newData = [...prevData];
-      const row = newData[index];
-      if (!row) return prevData;
-
-      if (key === 'qty' || key === 'price' || key === 'sno') {
-        const numericValue = value === '' ? 0 : parseFloat(value);
-        (row as any)[key] = numericValue;
-      } else if (key === 'total') {
-        // skip: total is computed
+  const updateField = (index: number, key: keyof typeof selectedItems[0], value: string) => {
+    setSelectedItems(prev => {
+      const newData = [...prev];
+      if (!newData[index]) return prev;
+      if (key === 'qty' || key === 'price') {
+        (newData[index] as any)[key] = parseFloat(value) || 0;
       } else {
-        (row as any)[key] = value;
+        (newData[index] as any)[key] = value;
       }
-
-      const qty = row.qty ?? 0;
-      const price = row.price ?? 0;
-      row.total = qty * price;
-
+      newData[index].total = (newData[index].qty ?? 0) * (newData[index].price ?? 0);
       return newData;
     });
   };
 
   const deleteRow = (index: number) => {
-    const item = tableData[index];
-    if (item.id != null) {
+    const row = selectedItems[index];
+    if (row?.id != null) {
       Alert.alert('Cancel Record', 'Do you want to cancel this item?', [
         { text: 'No' },
         {
-          text: 'Yes',
-          onPress: () => {
-            fetch('http://172.20.10.2:3001/api/cancel_kot', {
+          text: 'Yes', onPress: () => {
+            fetch(`${ngrok.BASE_URL}/api/cancel-kot`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: item.id }),
+              body: JSON.stringify({ id: row.id }),
             })
               .then(res => res.json())
               .then(data => {
                 if (data.success) {
+                  setSelectedItems(prev => {
+                    const updated = [...prev];
+                    updated[index].Cancel_Status = 'no';
+                    return updated;
+                  });
                   Alert.alert('Record cancelled');
-                  const newData = [...tableData];
-                  newData[index] = {
-                    ...newData[index],
-                    Cancel_Status: 'no',
-                  };
-                  setTableData(newData);
                 } else {
                   Alert.alert('Cancel failed');
                 }
-              })
-              .catch(err => {
-                console.error('Error cancelling:', err);
-                Alert.alert('Cancel error');
               });
           },
         },
       ]);
     } else {
-      const newData = [...tableData];
-      newData.splice(index, 1);
-      setTableData(newData);
+      setSelectedItems(prev => prev.filter((_, i) => i !== index));
     }
   };
 
-  const saveData = () => {
+   const saveData = () => {
+    if (!userId) {
+      Alert.alert('Error', 'User not logged in. Please login again.');
+      return;
+    }
+
     const payload = {
       menuSection: selectedItem,
       radioOption: selectedRadio,
       selectedRoom,
-      items: tableData.map(({ sno, ...rest }) => rest),
+      userId, // ✅ Passed correctly
+      items: selectedItems.map(({ sno, ...rest }) => rest),
     };
 
-    fetch('http://172.20.10.2:3001/api/save_menu_items', {
+    console.log('📦 Save Payload:', payload);
+
+    fetch(`${ngrok.BASE_URL}/api/save_menu_items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
       .then(res => res.json())
       .then(response => {
+        console.log('✅ Server response:', response);
         if (response.success) {
           Alert.alert('Saved successfully!');
+          clearSelectedItems();
         } else {
-          Alert.alert('Failed to save');
+          Alert.alert('Failed to save', response.message || '');
         }
       })
       .catch(err => {
@@ -151,57 +134,63 @@ const MenuScreen = () => {
         Alert.alert('Error saving data');
       });
   };
+  const printData = () => {
+  if (!userId) {
+    Alert.alert('Error', 'User not logged in. Please login again.');
+    return;
+  }
 
- const printData = () => {
-  fetch('http://172.20.10.2:3001/api/print_kot', {
+  console.log('🧾 Sending print request with userId:', userId);
+
+  fetch(`${ngrok.BASE_URL}/api/print_kot`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      selectedRoom,
-      selectedItem,
-      selectedRadio,
-      items: tableData.filter(item => item.Cancel_Status !== 'no'), // exclude cancelled items
+      userId, // ✅ Send userId
     }),
   })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
+    .then(async (res) => {
+      const data = await res.json();
+      console.log('📥 Print KOT Response:', data);
+
+      if (res.ok && data.success) {
         navigation.navigate('KOTPrintScreen', {
           kotNo: data.kotNo,
           items: data.items,
         });
       } else {
-        Alert.alert('Print Failed', data.message);
+        Alert.alert('Print failed', data.message || 'No KOT found for this user.');
       }
     })
     .catch(err => {
-      console.error('Print KOT error:', err);
-      Alert.alert('Error printing data');
+      console.error('❌ Print error:', err);
+      Alert.alert('Print Error', err.message || 'Something went wrong');
     });
 };
+
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Menu: {selectedItem}</Text>
 
       <View style={styles.splitContainer}>
-        {/* Left: Menu Items */}
         <ScrollView style={styles.leftColumn}>
           {menuItems.map((item, index) => (
             <TouchableOpacity
               key={index}
               style={styles.menuItem}
               onPress={() => {
-                const newRow: TableRow = {
-                  sno: tableData.length + 1,
+                const newRow = {
+                  sno: selectedItems.length + 1,
                   code: item.id.toString(),
                   desc: item.name,
                   qty: 1,
                   price: item.price,
                   total: item.price,
                   remarks: '',
+                  section: selectedItem,
                 };
-                setTableData([...tableData, newRow]);
+                setSelectedItems([...selectedItems, newRow]);
               }}
             >
               <Text style={styles.menuItemText}>{item.name} - ₹{item.price}</Text>
@@ -209,7 +198,6 @@ const MenuScreen = () => {
           ))}
         </ScrollView>
 
-        {/* Right: Table Grid */}
         <ScrollView horizontal style={styles.rightColumn}>
           <View>
             <View style={styles.headerRow}>
@@ -218,9 +206,9 @@ const MenuScreen = () => {
               ))}
             </View>
 
-            {tableData.map((item, index) => (
+            {selectedItems.map((item, index) => (
               <View style={styles.dataRow} key={index}>
-                {(['sno', 'code', 'desc', 'qty', 'price'] as (keyof TableRow)[]).map((key, i) => (
+                {(['sno', 'code', 'desc', 'qty', 'price'] as const).map((key, i) => (
                   <TextInput
                     key={i}
                     style={styles.input}
@@ -229,13 +217,13 @@ const MenuScreen = () => {
                     onChangeText={(text) => updateField(index, key, text)}
                   />
                 ))}
-                <Text style={styles.cell}>{item.total.toString()}</Text>
+                <Text style={styles.cell}>{item.total}</Text>
                 <TextInput
                   style={styles.input}
                   value={item.remarks}
                   onChangeText={(text) => updateField(index, 'remarks', text)}
                 />
-                <TouchableOpacity style={styles.deleteButton} onPress={() => deleteRow(index)}>
+                <TouchableOpacity onPress={() => deleteRow(index)}>
                   <Text style={styles.deleteText}>🗑️</Text>
                 </TouchableOpacity>
               </View>
@@ -257,73 +245,22 @@ const MenuScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 10, backgroundColor: '#fff' },
+  container: { flex: 1, padding: 10, backgroundColor: '#ffb665',},
   title: { fontSize: 20, fontWeight: 'bold', color: '#840214', marginBottom: 10 },
   splitContainer: { flexDirection: 'row', flex: 1 },
-  leftColumn: {
-    width: '45%',
-    borderRightWidth: 1,
-    borderColor: '#ccc',
-    paddingRight: 5,
-  },
-  rightColumn: {
-    width: '55%',
-    paddingLeft: 5,
-  },
-  menuItem: {
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderColor: '#ccc',
-  },
-  menuItemText: {
-    fontSize: 16,
-    color: '#840214',
-  },
+  leftColumn: { width: '45%', borderRightWidth: 1, borderColor: '#ccc', paddingRight: 5 },
+  rightColumn: { width: '55%', paddingLeft: 5 },
+  menuItem: { paddingVertical: 10, borderBottomWidth: 1, borderColor: '#ccc' },
+  menuItemText: { fontSize: 16, color: '#840214' },
   headerRow: { flexDirection: 'row', backgroundColor: '#ddd' },
-  headerCell: {
-    width: 70,
-    minWidth: 70,
-    padding: 5,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  dataRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderColor: '#ccc',
-  },
-  input: {
-    width: 70,
-    minWidth: 70,
-    padding: 5,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    textAlign: 'center',
-  },
-  cell: {
-    width: 70,
-    minWidth: 70,
-    padding: 5,
-    textAlign: 'center',
-  },
-  deleteButton: { width: 40, alignItems: 'center' },
-  deleteText: { fontSize: 18, color: '#c00' },
-  bottomButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 10,
-  },
-  saveButton: {
-    backgroundColor: '#840214',
-    padding: 10,
-    borderRadius: 5,
-  },
-  printButton: {
-    backgroundColor: '#840214',
-    padding: 10,
-    borderRadius: 5,
-  },
+  headerCell: { width: 70, minWidth: 70, padding: 5, fontWeight: 'bold', textAlign: 'center' },
+  dataRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderColor: '#ccc' },
+  input: { width: 70, minWidth: 70, padding: 5, borderWidth: 1, borderColor: '#ccc', textAlign: 'center' },
+  cell: { width: 70, minWidth: 70, padding: 5, textAlign: 'center' },
+  deleteText: { fontSize: 18, color: '#c00', paddingHorizontal: 10 },
+  bottomButtons: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 10 },
+  saveButton: { backgroundColor: '#840214', padding: 10, borderRadius: 5 },
+  printButton: { backgroundColor: '#840214', padding: 10, borderRadius: 5 },
   bottomButtonText: { color: '#fff', fontWeight: 'bold' },
 });
 
