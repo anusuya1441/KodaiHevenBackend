@@ -40,6 +40,7 @@ const PrintPreviewScreen = () => {
   const [loading, setLoading] = useState(true);
   const [printerConnected, setPrinterConnected] = useState(false);
   const [selectedPrinter, setSelectedPrinter] = useState<string | null>(null);
+  const [hasPrintedBefore, setHasPrintedBefore] = useState(false); // 👈 for copy/duplicate
   const { userId } = useUser();
 
   useEffect(() => {
@@ -103,74 +104,75 @@ const PrintPreviewScreen = () => {
       return;
     }
 
-    if (kotItems.length === 0) {
+    const itemsToPrint = kotItems.filter(item => item.Cancel_Status !== 'Yes');
+
+    if (itemsToPrint.length === 0) {
       Alert.alert('No Data', 'Nothing to print');
       return;
     }
 
-    const itemsToPrint = kotItems.filter(item => item.Cancel_Status !== 'Yes');
+    const radioOption = itemsToPrint[0]?.Radio_Option?.toUpperCase() || 'UNKNOWN';
+    const label = hasPrintedBefore
+      ? `KOT (DUPLICATE) - ${radioOption}`
+      : `KOT - ${radioOption}`;
 
-    const printOnce = async (label: string) => {
-      try {
-        await BluetoothEscposPrinter.printText("THE KODAI HAVEN\n", {
-          encoding: 'GBK',
-          codepage: 0,
-          widthtimes: 1,
-          heigthtimes: 1,
-          align: BluetoothEscposPrinter.ALIGN.CENTER,
-        });
+    try {
+      await BluetoothEscposPrinter.printText("      THE KODAI HEAVEN\n", {
+        encoding: 'GBK',
+        codepage: 0,
+        widthtimes: 1,
+        heigthtimes: 1,
+        align: BluetoothEscposPrinter.ALIGN.CENTER,
+      });
 
-        await BluetoothEscposPrinter.printText("----------------------------------------\n", {});
-        await BluetoothEscposPrinter.printText(
-          `${label} ${itemsToPrint[0]?.Radio_Option || 'KOT'}\n`,
-          { encoding: 'GBK', codepage: 0, widthtimes: 1, heigthtimes: 1 }
-        );
-        await BluetoothEscposPrinter.printText("----------------------------------------\n", {});
-        await BluetoothEscposPrinter.printText(
-          `Room NO : ${itemsToPrint[0]?.Room_No || '-'}     DATE : ${new Date().toISOString().split('T')[0]}\n`, {}
-        );
-        await BluetoothEscposPrinter.printText(
-          `TIME :  ${new Date().toLocaleTimeString()}\n`, {}
-        );
-        await BluetoothEscposPrinter.printText("----------------------------------------\n", {});
-        await BluetoothEscposPrinter.printText("S.NO ITEM                 QTY  PRICE\n", {});
-        await BluetoothEscposPrinter.printText("----------------------------------------\n", {});
+      await BluetoothEscposPrinter.printText("--------------------------------------------\n", {});
+      await BluetoothEscposPrinter.printText(`${label}\n`, {
+        align: BluetoothEscposPrinter.ALIGN.CENTER,
+      });
+      await BluetoothEscposPrinter.printText("--------------------------------------------\n", {});
+      await BluetoothEscposPrinter.printText(
+        `Room NO : ${itemsToPrint[0]?.Room_No || '-'}     DATE : ${new Date().toLocaleDateString()}\n`, {}
+      );
+      await BluetoothEscposPrinter.printText(
+        `TIME :  ${new Date().toLocaleTimeString()}\n`, {}
+      );
+      await BluetoothEscposPrinter.printText("--------------------------------------------\n", {});
+      await BluetoothEscposPrinter.printText("S.NO ITEM                 QTY  PRICE\n", {});
+      await BluetoothEscposPrinter.printText("--------------------------------------------\n", {});
 
-        let totalQty = 0;
-        let grandTotal = 0;
+      let totalQty = 0;
+      let grandTotal = 0;
 
-        for (let i = 0; i < itemsToPrint.length; i++) {
-          const item = itemsToPrint[i];
-          const sno = (i + 1).toString().padEnd(4);
-          const desc =
-            item.Description.length > 18
-              ? item.Description.slice(0, 18).padEnd(20)
-              : item.Description.padEnd(20);
-          const qty = item.Qty.toString().padEnd(5);
-          const price = `Rs.${item.Price}`.padEnd(6);
+      for (let i = 0; i < itemsToPrint.length; i++) {
+        const item = itemsToPrint[i];
+        const sno = (i + 1).toString().padEnd(4);
+        const desc =
+          item.Description.length > 18
+            ? item.Description.slice(0, 18).padEnd(20)
+            : item.Description.padEnd(20);
+        const qty = item.Qty.toString().padEnd(5);
+        const price = `Rs.${item.Price}`.padEnd(6);
 
-          await BluetoothEscposPrinter.printText(`${sno}${desc}${qty}${price}\n`, {});
-          if (item.Remarks) {
-            await BluetoothEscposPrinter.printText(`     (${item.Remarks})\n`, {});
-          }
-
-          totalQty += item.Qty;
-          grandTotal += item.Total;
+        await BluetoothEscposPrinter.printText(`${sno}${desc}${qty}${price}\n`, {});
+        if (item.Remarks) {
+          await BluetoothEscposPrinter.printText(`     (${item.Remarks})\n`, {});
         }
 
-        await BluetoothEscposPrinter.printText("----------------------------------------\n", {});
-        await BluetoothEscposPrinter.printText(
-          `NO.OF.ITEM : ${itemsToPrint.length}         TOT.QTY : ${totalQty}\n`, {}
-        );
-        await BluetoothEscposPrinter.printText(`TOTAL AMOUNT : Rs.${grandTotal}\n`, {});
-        await BluetoothEscposPrinter.printText("----------------------------------------\n\n\n", {});
-      } catch (err: any) {
-        Alert.alert('Print Error', err.message || 'Failed to print');
+        totalQty += item.Qty;
+        grandTotal += item.Total;
       }
-    };
 
-    await printOnce('KOT-COPY');
-    await printOnce('KOT-COPY (DUPLICATE)');
+      await BluetoothEscposPrinter.printText("--------------------------------------------\n", {});
+      await BluetoothEscposPrinter.printText(
+        `NO.OF.ITEM : ${itemsToPrint.length}         TOT.QTY : ${totalQty}\n`, {}
+      );
+      await BluetoothEscposPrinter.printText(`TOTAL AMOUNT : Rs.${grandTotal}\n`, {});
+      await BluetoothEscposPrinter.printText("--------------------------------------------\n\n\n", {});
+
+      setHasPrintedBefore(true);
+    } catch (err: any) {
+      Alert.alert('Print Error', err.message || 'Failed to print');
+    }
   };
 
   const renderItem = ({ item }: { item: KOTItem }) => (

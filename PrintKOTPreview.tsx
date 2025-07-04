@@ -28,6 +28,7 @@ const PrintKOTPreview = () => {
 
   const [printerConnected, setPrinterConnected] = useState(false);
   const [selectedPrinter, setSelectedPrinter] = useState<string | null>(null);
+  const [printedOnce, setPrintedOnce] = useState(false);
 
   useEffect(() => {
     requestBluetoothPermissions();
@@ -65,14 +66,18 @@ const PrintKOTPreview = () => {
     }
 
     const validItems = items.filter(item => item.Cancel_Status !== 'Yes');
-
     if (validItems.length === 0) {
       Alert.alert('No items to print.');
       return;
     }
 
+    const mode = validItems[0]?.Radio_Option?.toUpperCase() || 'UNKNOWN';
+    const baseTitle = printedOnce ? `KOT (DUPLICATE) - ${mode}` : `KOT - ${mode}`;
+    const updateText = "UPDATE";
+    const alignedTitle = baseTitle.padEnd(42 - updateText.length, ' ') + updateText;
+
     try {
-      await BluetoothEscposPrinter.printText("    THE KODAI HAVEN\n", {
+      await BluetoothEscposPrinter.printText("      THE KODAI HEAVEN\n", {
         encoding: 'GBK',
         codepage: 0,
         widthtimes: 1,
@@ -80,15 +85,19 @@ const PrintKOTPreview = () => {
         align: BluetoothEscposPrinter.ALIGN.CENTER,
       });
 
-      await BluetoothEscposPrinter.printText('-------------------------------\n', {});
+      await BluetoothEscposPrinter.printText(alignedTitle + '\n', {
+        encoding: 'GBK',
+        codepage: 0,
+      });
+
+      await BluetoothEscposPrinter.printText('--------------------------------------------\n', {});
       await BluetoothEscposPrinter.printText(`KOT NO: ${kotNo}\n`, {});
       await BluetoothEscposPrinter.printText(`DATE: ${new Date().toLocaleDateString()}\n`, {});
       await BluetoothEscposPrinter.printText(`TIME: ${new Date().toLocaleTimeString()}\n`, {});
       await BluetoothEscposPrinter.printText(`ROOM NO: ${validItems[0]?.Room_No || '-'}\n`, {});
-      await BluetoothEscposPrinter.printText(`MODE: ${validItems[0]?.Radio_Option || '-'}\n`, {});
-      await BluetoothEscposPrinter.printText('-------------------------------\n', {});
+      await BluetoothEscposPrinter.printText('--------------------------------------------\n', {});
       await BluetoothEscposPrinter.printText('SNO ITEM           QTY  PRICE\n', {});
-      await BluetoothEscposPrinter.printText('-------------------------------\n', {});
+      await BluetoothEscposPrinter.printText('--------------------------------------------\n', {});
 
       let totalQty = 0;
       let totalAmt = 0;
@@ -101,18 +110,22 @@ const PrintKOTPreview = () => {
           : item.Description.padEnd(14);
         const qty = `${item.Qty}`.padEnd(5);
         const price = `Rs.${item.Price}`.padEnd(6);
+
         await BluetoothEscposPrinter.printText(`${sno}${desc}${qty}${price}\n`, {});
         if (item.Remarks) {
           await BluetoothEscposPrinter.printText(`   (${item.Remarks})\n`, {});
         }
+
         totalQty += item.Qty;
         totalAmt += item.Total;
       }
 
-      await BluetoothEscposPrinter.printText('-------------------------------\n', {});
+      await BluetoothEscposPrinter.printText('--------------------------------------------\n', {});
       await BluetoothEscposPrinter.printText(`TOTAL QTY : ${totalQty}\n`, {});
       await BluetoothEscposPrinter.printText(`TOTAL AMT : Rs.${totalAmt}\n`, {});
-      await BluetoothEscposPrinter.printText('-------------------------------\n\n\n', {});
+      await BluetoothEscposPrinter.printText('--------------------------------------------\n\n\n', {});
+
+      setPrintedOnce(true);
     } catch (err: any) {
       Alert.alert('Print Error', err.message || 'Something went wrong');
     }
@@ -120,7 +133,7 @@ const PrintKOTPreview = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>Print Remove Cancelled KOT Preview</Text>
+      <Text style={styles.heading}>Print KOT Preview</Text>
 
       <FlatList
         data={items}
@@ -136,30 +149,13 @@ const PrintKOTPreview = () => {
 
       <View style={{ marginTop: 20 }}>
         <Text style={{ fontWeight: 'bold', marginBottom: 10 }}>Connect Printer:</Text>
-
-        <Button
-          title="Connect BP03R (Printer 1)"
-          onPress={() => connectPrinter('DC:0D:30:CD:D4:10')}
-        />
+        <Button title="Connect BP03R (Printer 1)" onPress={() => connectPrinter('DC:0D:30:CD:D4:10')} />
         <View style={{ height: 10 }} />
-
-        <Button
-          title="Connect BP03R-2 (Printer 2)"
-          onPress={() => connectPrinter('DC:0D:30:CD:D4:11')}
-        />
+        <Button title="Connect BP03R-2 (Printer 2)" onPress={() => connectPrinter('DC:0D:30:CD:D4:11')} />
         <View style={{ height: 10 }} />
-
-        <Button
-          title="Connect BP03R-3 (Printer 3)"
-          onPress={() => connectPrinter('DC:0D:30:CD:D4:12')}
-        />
+        <Button title="Connect BP03R-3 (Printer 3)" onPress={() => connectPrinter('DC:0D:30:CD:D4:12')} />
         <View style={{ height: 20 }} />
-
-        <Button
-          title="🖨️ Print This KOT"
-          onPress={handlePrint}
-          disabled={!printerConnected}
-        />
+        <Button title="🖨️ Print This KOT" onPress={handlePrint} disabled={!printerConnected} />
       </View>
     </View>
   );

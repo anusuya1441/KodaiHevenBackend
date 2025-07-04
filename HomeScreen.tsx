@@ -98,9 +98,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
               THE KODAI HEAVEN
             </Text>
           </View>
-          <Text style={[styles.subTitle, { fontSize: isDesktop ? 20 : isTablet ? 18 : 16 }]}>
-            CompanyName
-          </Text>
+          
 
           <View style={styles.infoContainer}>
             {radioOptions.map((item, index) => (
