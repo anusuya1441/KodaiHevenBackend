@@ -1,4 +1,4 @@
-const BASE_URL = 'https://6f51-2406-7400-ce-42e9-a447-b290-b46e-4480.ngrok-free.app';
+const BASE_URL = 'https://buttered-square-knot.glitch.me';
 export default {
   BASE_URL,
 };    

@@ -1,7 +1,7 @@
 const express = require('express');
 const { sql, getPool } = require('./connection');
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 const router = express.Router();
 app.use(express.json());
 require('dotenv').config();
