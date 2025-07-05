@@ -4,6 +4,7 @@ const app = express();
 const port = 3001;
 const router = express.Router();
 app.use(express.json());
+require('dotenv').config();
 
 // ✅ Login API
 app.post('/api/login', async (req, res) => {
